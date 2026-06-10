@@ -1,6 +1,6 @@
 # DPI Engine (Python)
 
-A Deep Packet Inspection engine written in Python — port of a C++ project.  
+A Deep Packet Inspection engine written in Python  
 Examines network packets to identify, classify, and block application traffic.
 
 ---
