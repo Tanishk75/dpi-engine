@@ -16,11 +16,13 @@ Unlike simple firewalls that only check source/destination IP, DPI looks inside 
 - Parental controls block inappropriate websites
 - Security systems detect malware or intrusion attempts
 
+```
 User Traffic (PCAP) → [DPI Engine] → Filtered Traffic (PCAP)
-↓
-- Identifies apps (YouTube, Facebook, etc.)
-- Blocks based on rules
-- Generates reports
+                             ↓
+                    - Identifies apps (YouTube, Facebook, etc.)
+                    - Blocks based on rules
+                    - Generates reports
+```
 
 ---
 
@@ -28,6 +30,7 @@ User Traffic (PCAP) → [DPI Engine] → Filtered Traffic (PCAP)
 
 Every network packet is like a Russian nesting doll — headers wrapped inside headers:
 
+```
 ┌──────────────────────────────────────────────────┐
 │ Ethernet Header (14 bytes)                       │
 │ ┌──────────────────────────────────────────────┐ │
@@ -41,6 +44,7 @@ Every network packet is like a Russian nesting doll — headers wrapped inside h
 │ │ └──────────────────────────────────────────┘ │ │
 │ └──────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -50,23 +54,26 @@ Every network packet is like a Russian nesting doll — headers wrapped inside h
 When you visit `https://www.youtube.com`, your browser sends a **Client Hello** that includes  
 the domain name *in plaintext* before encryption starts.
 
+```
 TLS Client Hello:
 ├── Version: TLS 1.2
 ├── Random: [32 bytes]
 ├── Cipher Suites: [list]
 └── Extensions:
-└── SNI Extension:
-└── Server Name: "www.youtube.com"  ← We extract THIS!
-
+    └── SNI Extension:
+        └── Server Name: "www.youtube.com"  ← We extract THIS!
+```
 
 > Even though HTTPS is encrypted, the domain name is visible in the first packet!
 
 ---
 
 ## Project Structure
+
+```
 dpi_engine/
 ├── dpi/
-│   ├── init.py        # Package init
+│   ├── __init__.py        # Package init
 │   ├── types.py           # Data structures + app classification (20+ apps)
 │   ├── pcap_reader.py     # PCAP file reader and writer (no external libs)
 │   ├── packet_parser.py   # Ethernet / IPv4 / TCP / UDP parser
@@ -75,6 +82,7 @@ dpi_engine/
 ├── main_mt.py             # Multi-threaded CLI entry point
 ├── requirements.txt       # No external dependencies
 └── .gitignore
+```
 
 ---
 
@@ -82,6 +90,7 @@ dpi_engine/
 
 ### Step 1 — Read PCAP File
 
+```
 PCAP File Format:
 ┌────────────────────────────┐
 │ Global Header (24 bytes)   │  ← Read once at start
@@ -91,15 +100,20 @@ PCAP File Format:
 ├────────────────────────────┤
 │ ... more packets ...       │
 └────────────────────────────┘
+```
 
 ### Step 2 — Parse Protocol Headers
+
+```
 raw bytes:
 [0-13]   Ethernet Header  → src/dst MAC, EtherType
 [14-33]  IP Header        → src/dst IP, protocol, TTL
 [34-53]  TCP Header       → src/dst port, flags, seq
 [54+]    Payload          → TLS / HTTP / DNS data
+```
 
 ### Step 3 — Build the Five-Tuple
+
 A connection is uniquely identified by 5 values:
 
 | Field | Example | Purpose |
@@ -113,45 +127,55 @@ A connection is uniquely identified by 5 values:
 All packets with the same five-tuple belong to the same **flow**.
 
 ### Step 4 — Extract SNI (Deep Packet Inspection)
+
 For HTTPS traffic on port 443, we parse the TLS Client Hello:
+
+```
 Byte 0:     Content Type = 0x16 (Handshake)
 Byte 5:     Handshake Type = 0x01 (Client Hello)
 ...
 SNI Extension (type 0x0000):
 └── Server Name: "www.youtube.com"  ← EXTRACTED
-
+```
 
 ### Step 5 — Classify the Flow
+
 ```python
 sni = "www.youtube.com"
 # maps to → AppType.YOUTUBE
 ```
+
 Supports 20+ apps: Google, YouTube, Facebook, Instagram, Netflix,
 Amazon, Microsoft, Apple, WhatsApp, Telegram, TikTok, Spotify,
 Zoom, Discord, GitHub, Cloudflare, Twitter/X, and more.
 
 ### Step 6 — Apply Blocking Rules
+
+```
 Packet arrives
 │
 ▼
 ┌─────────────────────────────────┐
 │ Is source IP in blocked list?  │──Yes──► DROP
 └───────────────┬─────────────────┘
-│ No
-▼
+                │ No
+                ▼
 ┌─────────────────────────────────┐
 │ Is app type in blocked list?   │──Yes──► DROP
 └───────────────┬─────────────────┘
-│ No
-▼
+                │ No
+                ▼
 ┌─────────────────────────────────┐
 │ Does SNI match blocked domain? │──Yes──► DROP
 └───────────────┬─────────────────┘
-│ No
-▼
-FORWARD → write to output.pcap
+                │ No
+                ▼
+        FORWARD → write to output.pcap
+```
 
 ### Step 7 — Generate Report
+
+```
 ╔══════════════════════════════════════════════╗
 ║             PROCESSING REPORT               ║
 ╠══════════════════════════════════════════════╣
@@ -166,6 +190,7 @@ FORWARD → write to output.pcap
 ║  YouTube             4    5.8%  # (BLOCKED) ║
 ║  DNS                 4    5.8%  #           ║
 ╚══════════════════════════════════════════════╝
+```
 
 ---
 
@@ -178,7 +203,8 @@ FORWARD → write to output.pcap
 
 ### Multi-threaded Architecture
 
-┌─────────────────┐
+```
+            ┌─────────────────┐
             │  Reader Thread  │
             │  (reads PCAP)   │
             └────────┬────────┘
@@ -189,21 +215,23 @@ FORWARD → write to output.pcap
 │  LB0 Thread     │           │  LB1 Thread     │
 │ (Load Balancer) │           │ (Load Balancer) │
 └────────┬────────┘           └────────┬────────┘
-│ hash % num_fps              │ hash % num_fps
-┌────┴────┐                   ┌────┴────┐
-▼         ▼                   ▼         ▼
+         │ hash % num_fps              │ hash % num_fps
+    ┌────┴────┐                   ┌────┴────┐
+    ▼         ▼                   ▼         ▼
 ┌───────┐ ┌───────┐           ┌───────┐ ┌───────┐
 │  FP0  │ │  FP1  │           │  FP2  │ │  FP3  │
 │(Fast  │ │(Fast  │           │(Fast  │ │(Fast  │
 │ Path) │ │ Path) │           │ Path) │ │ Path) │
 └───┬───┘ └───┬───┘           └───┬───┘ └───┬───┘
-└─────────┴───────────────────┴─────────┘
-│
-▼
-┌───────────────────────┐
-│  Output Writer Thread │
-│   (writes to PCAP)    │
-└───────────────────────┘
+    └─────────┴───────────────────┴─────────┘
+                        │
+                        ▼
+            ┌───────────────────────┐
+            │  Output Writer Thread │
+            │   (writes to PCAP)    │
+            └───────────────────────┘
+```
+
 **Why consistent hashing?**  
 All packets of the same connection always go to the same Fast Path thread,  
 so flow state is tracked correctly without locks.
@@ -228,12 +256,13 @@ python main.py input.pcap output.pcap --block-ip 192.168.1.50
 # Combine rules
 python main.py input.pcap output.pcap --block-app YouTube --block-domain tiktok.com --block-ip 192.168.1.50
 
-# Multi-threaded (coming soon)
+# Multi-threaded
 python main_mt.py input.pcap output.pcap --lbs 2 --fps 4
 ```
 
 ---
 
 ## Requirements
+
 - Python 3.10+
 - No external libraries needed — pure Python
