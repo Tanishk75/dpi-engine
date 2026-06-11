@@ -261,6 +261,17 @@ python main_mt.py input.pcap output.pcap --lbs 2 --fps 4
 ```
 
 ---
+## Generate Test Traffic
+
+```bash
+# Creates test_traffic.pcap with 57 packets across 15+ apps
+python generate_test_pcap.py
+
+# Then test blocking on it
+python main.py test_traffic.pcap filtered.pcap --block-app YouTube --block-app Facebook --block-domain netflix.com
+```
+
+---
 
 ## Requirements
 
