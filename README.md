@@ -277,3 +277,30 @@ python main.py test_traffic.pcap filtered.pcap --block-app YouTube --block-app F
 
 - Python 3.10+
 - No external libraries needed — pure Python
+
+---
+
+## Quick Start (Copy & Paste)
+
+### Step 1 — Clone
+```bash
+git clone https://github.com/Tanishk75/dpi-engine.git
+cd dpi-engine
+```
+
+### Step 2 — Generate test traffic
+```bash
+python generate_test_pcap.py
+```
+
+### Step 3 — Run single-threaded
+```bash
+python main.py test_traffic.pcap filtered.pcap --block-app YouTube --block-app Facebook
+```
+
+### Step 4 — Run multi-threaded
+```bash
+python main_mt.py test_traffic.pcap filtered_mt.pcap --block-app YouTube --lbs 2 --fps 2
+```
+
+That's it — no installs needed.
